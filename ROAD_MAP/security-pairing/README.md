@@ -10,6 +10,6 @@ This feature implements a secure, authenticated trigger system to ensure only au
 
 ## Steps
 - [x] **STEP 1**: Protocol Design & Key Storage (Define beacon format and JSON storage).
-- [ ] **STEP 2**: Web UI Implementation (Device listing and 'Pairing Mode' toggle).
+- [x] **STEP 2**: Web UI Implementation (Device listing and 'Pairing Mode' toggle).
 - [ ] **STEP 3**: Android Key Exchange (Pairing handshake via BLE connection).
 - [ ] **STEP 4**: Authenticated Listener (Verify HMAC signatures on beacons).

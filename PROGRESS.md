@@ -9,7 +9,8 @@
 - [x] Implement Android BLE Trigger App
 - [x] Create automated setup and run script for Raspi
 - [x] **STEP 1**: Protocol Design & Key Storage
-- [ ] **STEP 2**: Web UI Implementation
+- [x] **STEP 2**: Web UI Implementation
+- [ ] **STEP 3**: Android Key Exchange
 
 ## Summary
-Defined a secure BLE beacon protocol using truncated HMAC-SHA256 and 4-byte nonces for replay protection. Implemented `SecurityManager` for key management and verification logic.
+Implemented a modern FastAPI Web UI with Tailwind CSS. Users can now view paired devices, delete them, and toggle "Pairing Mode" to allow new registrations.
