@@ -1,7 +1,7 @@
 # Progress - BlueZcript
 
 ## Active Feature
-- Secure Pairing & Triggering
+- Secure Pairing & Triggering (Completed)
 
 ## Status
 - [x] Initialize Repository and Project Structure
@@ -11,7 +11,7 @@
 - [x] **STEP 1**: Protocol Design & Key Storage
 - [x] **STEP 2**: Web UI Implementation
 - [x] **STEP 3**: Android Key Exchange
-- [ ] **STEP 4**: Authenticated Listener
+- [x] **STEP 4**: Authenticated Listener
 
 ## Summary
-Implemented Android-side security logic. The app now supports storing PSKs, generating incrementing nonces, and producing truncated HMAC-SHA256 signatures for BLE advertising packets.
+The secure trigger system is fully implemented. The Raspberry Pi now runs an authenticated BLE listener that verifies truncated HMAC-SHA256 signatures and protects against replay attacks using per-device nonces. Management is handled through a mobile-friendly FastAPI Web UI.
