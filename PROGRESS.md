@@ -8,7 +8,8 @@
 - [x] Implement Python BLE Listener for Raspi 4
 - [x] Implement Android BLE Trigger App
 - [x] Create automated setup and run script for Raspi
-- [ ] **STEP 1**: Protocol Design & Key Storage
+- [x] **STEP 1**: Protocol Design & Key Storage
+- [ ] **STEP 2**: Web UI Implementation
 
 ## Summary
-The project has been secured by starting the implementation of a pairing-based authentication system. The roadmap now includes a Web UI for management and HMAC-protected beacons.
+Defined a secure BLE beacon protocol using truncated HMAC-SHA256 and 4-byte nonces for replay protection. Implemented `SecurityManager` for key management and verification logic.
