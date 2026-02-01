@@ -10,7 +10,8 @@
 - [x] Create automated setup and run script for Raspi
 - [x] **STEP 1**: Protocol Design & Key Storage
 - [x] **STEP 2**: Web UI Implementation
-- [ ] **STEP 3**: Android Key Exchange
+- [x] **STEP 3**: Android Key Exchange
+- [ ] **STEP 4**: Authenticated Listener
 
 ## Summary
-Implemented a modern FastAPI Web UI with Tailwind CSS. Users can now view paired devices, delete them, and toggle "Pairing Mode" to allow new registrations.
+Implemented Android-side security logic. The app now supports storing PSKs, generating incrementing nonces, and producing truncated HMAC-SHA256 signatures for BLE advertising packets.
