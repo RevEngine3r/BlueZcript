@@ -1,14 +1,13 @@
 # Progress - BlueZcript
 
 ## Active Feature
-- Completed
+- Environment Setup Automation
 
 ## Status
 - [x] Initialize Repository and Project Structure
 - [x] Implement Python BLE Listener for Raspi 4
 - [x] Implement Android BLE Trigger App
+- [x] Create automated setup and run script for Raspi
 
 ## Summary
-The project is now fully operational with a Python-based BLE server for Raspberry Pi and a Kotlin/Compose Android client.
-- **Repository**: [BlueZcript](https://github.com/RevEngine3r/BlueZcript)
-- **Features**: Scanning, automatic connection, and command execution.
+The project now includes a convenience script `setup_and_run.sh` that handles virtual environment creation, dependency installation, and server startup in one command.
