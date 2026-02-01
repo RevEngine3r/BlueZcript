@@ -1,1 +1,5 @@
 /.idea/
+/android-app/.gradle/
+/android-app/.idea/
+/android-app/build/
+/android-app/.kotlin/
