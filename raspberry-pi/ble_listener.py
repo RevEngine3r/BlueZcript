@@ -11,7 +11,6 @@ class ScanDelegate(DefaultDelegate):
 
     def handleDiscovery(self, dev, isNewDev, isNewData):
         # Check for manufacturer data with Company ID 0xFFFF
-        # Note: bluepy returns manufacturer data indexed by company ID
         for (adtype, desc, value) in dev.getScanData():
             if adtype == 255:  # Manufacturer Specific Data
                 try:
@@ -37,32 +36,29 @@ class ScanDelegate(DefaultDelegate):
                     # [5:13] Signature (8 bytes)
                     
                     if len(payload) < 13:
-                        print(f"[!] Invalid payload length: {len(payload)} (expected 13)")
                         continue
 
                     cmd_type = payload[0]
                     if cmd_type != 0x01:
-                        print(f"[!] Unknown command type: 0x{cmd_type:02x}")
                         continue
                     
                     nonce = int.from_bytes(payload[1:5], 'big')
                     signature = payload[5:13]
                     
-                    # Identify device by address
-                    device_id = dev.addr.replace(":", "").lower()
+                    mac_address = dev.addr.replace(":", "").lower()
+                    print(f"[*] Received beacon from {mac_address} (Nonce: {nonce})")
                     
-                    print(f"[*] Received beacon from {device_id} (Nonce: {nonce})")
-                    
-                    is_valid, reason = self.sm.verify_beacon(device_id, nonce, signature)
+                    # Try to verify with any registered device
+                    is_valid, device_name = self.sm.verify_any_device(nonce, signature)
                     
                     if is_valid:
-                        print(f"[✓] Valid trigger from {device_id}")
+                        print(f"[✓] Valid trigger from '{device_name}'")
                         self.execute_trigger()
                     else:
-                        print(f"[✗] Blocked beacon from {device_id}: {reason}")
+                        print(f"[✗] Invalid signature - no matching PSK found")
 
                 except Exception as e:
-                    print(f"[!] Error parsing advertisement: {e}")
+                    # Silently ignore malformed packets
                     pass
 
     def execute_trigger(self):
@@ -79,6 +75,7 @@ async def main():
     
     print("╔═══════════════════════════════════════════════════╗")
     print("║  BlueZcript Authenticated Listener Active        ║")
+    print("║  PSK-Based Authentication (MAC-Independent)      ║")
     print("╚═══════════════════════════════════════════════════╝")
     print(f"Trusted devices: {len(sm.devices)}")
     print("Scanning for BLE advertisements...\n")
