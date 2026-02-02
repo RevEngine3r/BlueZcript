@@ -6,6 +6,7 @@ import qrcode
 import io
 import base64
 import secrets
+import re
 
 app = FastAPI(title="BlueZcript Management")
 templates = Jinja2Templates(directory="templates")
@@ -79,8 +80,11 @@ async def register_device(
     if pending["psk"] != psk:
         return {"success": False, "error": "Invalid PSK"}
     
+    # Normalize MAC address
+    mac_clean = re.sub(r'[^0-9a-fA-F]', '', mac_address).lower()
+    
     # Register device with actual MAC address
-    sm.devices[mac_address.lower()] = {
+    sm.devices[mac_clean] = {
         "name": pending["name"],
         "psk": psk,
         "last_nonce": 0,
@@ -92,6 +96,29 @@ async def register_device(
     del pending_registrations[device_id]
     
     return {"success": True}
+
+@app.post("/manual-register")
+async def manual_register(name: str = Form(...), mac_address: str = Form(...)):
+    """Manually register a device with actual BLE MAC from listener logs"""
+    # Normalize MAC address: remove colons and convert to lowercase
+    mac_clean = re.sub(r'[^0-9a-fA-F]', '', mac_address).lower()
+    
+    if len(mac_clean) != 12:
+        return RedirectResponse(url="/?error=invalid_mac", status_code=303)
+    
+    # Generate new PSK
+    psk = secrets.token_hex(16)
+    
+    # Register device
+    sm.devices[mac_clean] = {
+        "name": name,
+        "psk": psk,
+        "last_nonce": 0,
+        "added_at": int(__import__('time').time())
+    }
+    sm._save_db()
+    
+    return RedirectResponse(url="/", status_code=303)
 
 @app.post("/delete-device/{device_id}")
 async def delete_device(device_id: str):
