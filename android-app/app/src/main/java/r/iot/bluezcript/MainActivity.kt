@@ -37,6 +37,7 @@ class MainActivity : ComponentActivity() {
     private var status by mutableStateOf("Ready")
     private var isPaired by mutableStateOf(false)
     private var hasBluetoothPermissions by mutableStateOf(false)
+    private var detectedMacAddress by mutableStateOf<String?>(null)
 
     // Result launcher for QR Code Scanning
     private val barcodeLauncher = registerForActivityResult(ScanContract()) { result ->
@@ -51,17 +52,19 @@ class MainActivity : ComponentActivity() {
                 // Get our Bluetooth MAC address and register with server
                 val macAddress = getBluetoothMacAddress()
                 if (macAddress != null) {
-                    status = "Registering device..."
+                    detectedMacAddress = macAddress
+                    status = "MAC: $macAddress - Registering..."
                     registerDeviceWithServer(serverUrl, deviceId, macAddress, psk)
                 } else {
                     status = "Could not read Bluetooth MAC address"
-                    Toast.makeText(this, "Bluetooth MAC address unavailable", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(this, "Bluetooth MAC address unavailable. Check in Settings > About Phone > Bluetooth Address and manually pair in Web UI.", Toast.LENGTH_LONG).show()
                 }
             } else if (parts.size == 2) {
                 // Legacy format: device_id|psk (save directly)
+                // Assume device_id is the MAC address
                 securityManager.savePairing(parts[0], parts[1])
                 isPaired = true
-                status = "Successfully Paired"
+                status = "Successfully Paired (Legacy)"
             } else {
                 status = "Invalid QR Code Format"
                 Toast.makeText(this, "QR Format Error", Toast.LENGTH_SHORT).show()
@@ -76,7 +79,7 @@ class MainActivity : ComponentActivity() {
         val bleAdvertiseGranted = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             perms[Manifest.permission.BLUETOOTH_ADVERTISE] ?: false
         } else {
-            true // Not required for older Android versions
+            true
         }
         val bleConnectGranted = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             perms[Manifest.permission.BLUETOOTH_CONNECT] ?: false
@@ -110,6 +113,12 @@ class MainActivity : ComponentActivity() {
         }
         
         isPaired = securityManager.getPsk() != null
+        
+        // Try to get MAC address on startup
+        val mac = getBluetoothMacAddress()
+        if (mac != null) {
+            detectedMacAddress = mac
+        }
 
         // Check if permissions are already granted
         checkPermissionsStatus()
@@ -124,6 +133,7 @@ class MainActivity : ComponentActivity() {
                 status = status,
                 isPaired = isPaired,
                 hasBluetoothPermissions = hasBluetoothPermissions,
+                detectedMac = detectedMacAddress,
                 onScanQR = { 
                     if (!hasBluetoothPermissions) {
                         requestPermissions()
@@ -142,7 +152,6 @@ class MainActivity : ComponentActivity() {
                     }
                 },
                 onReset = {
-                    // Hidden feature to reset pairing for testing
                     getSharedPreferences("bluezcript_security", MODE_PRIVATE).edit().clear().apply()
                     isPaired = false
                     status = "Pairing Reset"
@@ -159,7 +168,13 @@ class MainActivity : ComponentActivity() {
                     return null
                 }
             }
-            bluetoothManager.adapter?.address?.replace(":", "")?.lowercase()
+            val address = bluetoothManager.adapter?.address
+            // Note: On Android 6+ this may return 02:00:00:00:00:00 for privacy
+            if (address != null && address != "02:00:00:00:00:00") {
+                address.replace(":", "").lowercase()
+            } else {
+                null
+            }
         } catch (e: Exception) {
             Log.e("MainActivity", "Error getting MAC address", e)
             null
@@ -187,8 +202,8 @@ class MainActivity : ComponentActivity() {
                     securityManager.savePairing(macAddress, psk)
                     runOnUiThread {
                         isPaired = true
-                        status = "Successfully Paired"
-                        Toast.makeText(this@MainActivity, "Device registered successfully", Toast.LENGTH_SHORT).show()
+                        status = "Paired! MAC: $macAddress"
+                        Toast.makeText(this@MainActivity, "Device registered. If triggers don't work, check listener logs for actual MAC.", Toast.LENGTH_LONG).show()
                     }
                 } else {
                     runOnUiThread {
@@ -245,6 +260,7 @@ fun MainScreen(
     status: String, 
     isPaired: Boolean,
     hasBluetoothPermissions: Boolean,
+    detectedMac: String?,
     onScanQR: () -> Unit, 
     onTrigger: () -> Unit,
     onReset: () -> Unit
@@ -257,6 +273,20 @@ fun MainScreen(
         ) {
             Text(text = "BlueZcript Secure", style = MaterialTheme.typography.headlineLarge)
             Text(text = status, color = MaterialTheme.colorScheme.secondary, style = MaterialTheme.typography.bodyMedium)
+            
+            if (detectedMac != null && !isPaired) {
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = "Detected MAC: $detectedMac",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.tertiary
+                )
+                Text(
+                    text = "⚠ May differ from actual BLE MAC",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.error
+                )
+            }
             
             Spacer(modifier = Modifier.height(64.dp))
 
