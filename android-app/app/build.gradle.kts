@@ -55,8 +55,7 @@ dependencies {
     implementation(libs.androidx.compose.material3)
     implementation(libs.androidx.activity.ktx)
     
-    // QR Code Scanning Library
-    implementation("com.journeyapps:zxing-android-embedded:4.3.0")
+    implementation(libs.zxing.android.embedded)
     
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)

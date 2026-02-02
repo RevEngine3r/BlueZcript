@@ -2,12 +2,14 @@ from fastapi import FastAPI, Request, Form
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from security_manager import SecurityManager
+from fastapi.staticfiles import StaticFiles
 import qrcode
 import io
 import base64
 import secrets
 
 app = FastAPI(title="BlueZcript Management")
+app.mount("/static", StaticFiles(directory="static"), name="static")
 templates = Jinja2Templates(directory="templates")
 sm = SecurityManager()
 
