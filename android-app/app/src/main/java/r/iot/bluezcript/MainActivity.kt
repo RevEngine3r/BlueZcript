@@ -1,10 +1,12 @@
 package r.iot.bluezcript
 
 import android.Manifest
+import android.annotation.SuppressLint
 import android.bluetooth.BluetoothManager
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
+import android.util.Log
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -20,11 +22,18 @@ import com.journeyapps.barcodescanner.ScanContract
 import com.journeyapps.barcodescanner.ScanOptions
 import r.iot.bluezcript.ble.TriggerService
 import r.iot.bluezcript.security.SecurityManager
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import java.net.HttpURLConnection
+import java.net.URL
+import java.net.URLEncoder
 
 class MainActivity : ComponentActivity() {
 
     private lateinit var securityManager: SecurityManager
     private lateinit var triggerService: TriggerService
+    private lateinit var bluetoothManager: BluetoothManager
     private var status by mutableStateOf("Ready")
     private var isPaired by mutableStateOf(false)
     private var hasBluetoothPermissions by mutableStateOf(false)
@@ -33,7 +42,23 @@ class MainActivity : ComponentActivity() {
     private val barcodeLauncher = registerForActivityResult(ScanContract()) { result ->
         if (result.contents != null) {
             val parts = result.contents.split("|")
-            if (parts.size == 2) {
+            if (parts.size == 3) {
+                // New format: server_url|device_id|psk
+                val serverUrl = parts[0]
+                val deviceId = parts[1]
+                val psk = parts[2]
+                
+                // Get our Bluetooth MAC address and register with server
+                val macAddress = getBluetoothMacAddress()
+                if (macAddress != null) {
+                    status = "Registering device..."
+                    registerDeviceWithServer(serverUrl, deviceId, macAddress, psk)
+                } else {
+                    status = "Could not read Bluetooth MAC address"
+                    Toast.makeText(this, "Bluetooth MAC address unavailable", Toast.LENGTH_SHORT).show()
+                }
+            } else if (parts.size == 2) {
+                // Legacy format: device_id|psk (save directly)
                 securityManager.savePairing(parts[0], parts[1])
                 isPaired = true
                 status = "Successfully Paired"
@@ -77,7 +102,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         
         securityManager = SecurityManager(this)
-        val bluetoothManager = getSystemService(BLUETOOTH_SERVICE) as BluetoothManager
+        bluetoothManager = getSystemService(BLUETOOTH_SERVICE) as BluetoothManager
         val advertiser = bluetoothManager.adapter?.bluetoothLeAdvertiser
         
         if (advertiser != null) {
@@ -85,7 +110,7 @@ class MainActivity : ComponentActivity() {
         }
         
         isPaired = securityManager.getPsk() != null
-        
+
         // Check if permissions are already granted
         checkPermissionsStatus()
         
@@ -123,6 +148,62 @@ class MainActivity : ComponentActivity() {
                     status = "Pairing Reset"
                 }
             )
+        }
+    }
+
+    @SuppressLint("HardwareIds", "MissingPermission")
+    private fun getBluetoothMacAddress(): String? {
+        return try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                if (ContextCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH_CONNECT) != PackageManager.PERMISSION_GRANTED) {
+                    return null
+                }
+            }
+            bluetoothManager.adapter?.address?.replace(":", "")?.lowercase()
+        } catch (e: Exception) {
+            Log.e("MainActivity", "Error getting MAC address", e)
+            null
+        }
+    }
+
+    private fun registerDeviceWithServer(serverUrl: String, deviceId: String, macAddress: String, psk: String) {
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
+                val url = URL("$serverUrl/register-device")
+                val connection = url.openConnection() as HttpURLConnection
+                connection.requestMethod = "POST"
+                connection.doOutput = true
+                connection.setRequestProperty("Content-Type", "application/x-www-form-urlencoded")
+                
+                val postData = "device_id=${URLEncoder.encode(deviceId, "UTF-8")}" +
+                        "&mac_address=${URLEncoder.encode(macAddress, "UTF-8")}" +
+                        "&psk=${URLEncoder.encode(psk, "UTF-8")}"
+                
+                connection.outputStream.write(postData.toByteArray())
+                
+                val responseCode = connection.responseCode
+                if (responseCode == 200) {
+                    // Save pairing locally with MAC as device_id
+                    securityManager.savePairing(macAddress, psk)
+                    runOnUiThread {
+                        isPaired = true
+                        status = "Successfully Paired"
+                        Toast.makeText(this@MainActivity, "Device registered successfully", Toast.LENGTH_SHORT).show()
+                    }
+                } else {
+                    runOnUiThread {
+                        status = "Registration failed"
+                        Toast.makeText(this@MainActivity, "Failed to register with server", Toast.LENGTH_SHORT).show()
+                    }
+                }
+                connection.disconnect()
+            } catch (e: Exception) {
+                Log.e("MainActivity", "Error registering device", e)
+                runOnUiThread {
+                    status = "Registration error: ${e.message}"
+                    Toast.makeText(this@MainActivity, "Network error", Toast.LENGTH_SHORT).show()
+                }
+            }
         }
     }
 
