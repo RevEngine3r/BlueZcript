@@ -3,6 +3,7 @@ package r.iot.bluezcript
 import android.Manifest
 import android.bluetooth.BluetoothManager
 import android.os.Bundle
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
@@ -12,6 +13,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.journeyapps.barcodescanner.ScanContract
+import com.journeyapps.barcodescanner.ScanOptions
 import r.iot.bluezcript.ble.TriggerService
 import r.iot.bluezcript.security.SecurityManager
 
@@ -22,26 +25,27 @@ class MainActivity : ComponentActivity() {
     private var status by mutableStateOf("Ready")
     private var isPaired by mutableStateOf(false)
 
-    private val requestPermissionLauncher = registerForActivityResult(
-        ActivityResultContracts.RequestMultiplePermissions()
-    ) { perms ->
-        if (!perms.values.all { it }) status = "Permissions Denied"
+    private val barcodeLauncher = registerForActivityResult(ScanContract()) { result ->
+        if (result.contents != null) {
+            val parts = result.contents.split("|")
+            if (parts.size == 2) {
+                securityManager.savePairing(parts[0], parts[1])
+                isPaired = true
+                status = "Paired via QR"
+            } else {
+                Toast.makeText(this, "Invalid QR Format", Toast.LENGTH_SHORT).show()
+            }
+        }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        
         securityManager = SecurityManager(this)
         val bluetoothManager = getSystemService(BLUETOOTH_SERVICE) as BluetoothManager
-        val adapter = bluetoothManager.adapter
-        
-        // Fix: Retrieve the Advertiser instead of the Scanner
-        val advertiser = adapter?.bluetoothLeAdvertiser
+        val advertiser = bluetoothManager.adapter?.bluetoothLeAdvertiser
         
         if (advertiser != null) {
             triggerService = TriggerService(advertiser, securityManager)
-        } else {
-            status = "BLE Advertising not supported"
         }
         
         isPaired = securityManager.getPsk() != null
@@ -50,45 +54,26 @@ class MainActivity : ComponentActivity() {
             MainScreen(
                 status = status,
                 isPaired = isPaired,
-                onPair = { id, psk ->
-                    securityManager.savePairing(id, psk)
-                    isPaired = true
-                    status = "Device Paired"
+                onScanQR = { 
+                    val options = ScanOptions()
+                    options.setDesiredBarcodeFormats(ScanOptions.QR_CODE)
+                    options.setPrompt("Scan BlueZcript Pairing QR")
+                    options.setBeepEnabled(false)
+                    barcodeLauncher.launch(options)
                 },
                 onTrigger = {
                     if (::triggerService.isInitialized) {
                         triggerService.sendTrigger()
                         status = "Beacon Sent"
-                    } else {
-                        status = "Error: Service Not Ready"
                     }
-                },
-                onRequestPermissions = { checkPermissions() }
+                }
             )
         }
-    }
-
-    private fun checkPermissions() {
-        requestPermissionLauncher.launch(
-            arrayOf(
-                Manifest.permission.BLUETOOTH_ADVERTISE,
-                Manifest.permission.BLUETOOTH_CONNECT
-            )
-        )
     }
 }
 
 @Composable
-fun MainScreen(
-    status: String,
-    isPaired: Boolean,
-    onPair: (String, String) -> Unit,
-    onTrigger: () -> Unit,
-    onRequestPermissions: () -> Unit
-) {
-    var deviceId by remember { mutableStateOf("") }
-    var psk by remember { mutableStateOf("") }
-
+fun MainScreen(status: String, isPaired: Boolean, onScanQR: () -> Unit, onTrigger: () -> Unit) {
     Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
         Column(
             modifier = Modifier.fillMaxSize().padding(24.dp),
@@ -96,31 +81,13 @@ fun MainScreen(
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Text(text = "BlueZcript Secure", style = MaterialTheme.typography.headlineMedium)
-            Spacer(modifier = Modifier.height(8.dp))
             Text(text = "Status: $status", color = MaterialTheme.colorScheme.primary)
             
-            Spacer(modifier = Modifier.height(32.dp))
+            Spacer(modifier = Modifier.height(48.dp))
 
             if (!isPaired) {
-                OutlinedTextField(
-                    value = deviceId,
-                    onValueChange = { deviceId = it },
-                    label = { Text("Device ID") },
-                    modifier = Modifier.fillMaxWidth()
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-                OutlinedTextField(
-                    value = psk,
-                    onValueChange = { psk = it },
-                    label = { Text("Pre-Shared Key (Hex)") },
-                    modifier = Modifier.fillMaxWidth()
-                )
-                Spacer(modifier = Modifier.height(16.dp))
-                Button(
-                    onClick = { if (deviceId.isNotBlank() && psk.isNotBlank()) onPair(deviceId, psk) },
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text("SAVE PAIRING")
+                Button(onClick = onScanQR, modifier = Modifier.fillMaxWidth().height(56.dp)) {
+                    Text("SCAN QR CODE TO PAIR")
                 }
             } else {
                 Button(
@@ -129,10 +96,6 @@ fun MainScreen(
                     shape = MaterialTheme.shapes.extraLarge
                 ) {
                     Text("TRIGGER")
-                }
-                Spacer(modifier = Modifier.height(16.dp))
-                TextButton(onClick = onRequestPermissions) {
-                    Text("Refresh Permissions")
                 }
             }
         }
