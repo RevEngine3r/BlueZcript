@@ -2,6 +2,8 @@ package r.iot.bluezcript
 
 import android.Manifest
 import android.bluetooth.BluetoothManager
+import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
 import android.widget.Toast
 import androidx.activity.ComponentActivity
@@ -13,6 +15,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
 import com.journeyapps.barcodescanner.ScanContract
 import com.journeyapps.barcodescanner.ScanOptions
 import r.iot.bluezcript.ble.TriggerService
@@ -24,6 +27,7 @@ class MainActivity : ComponentActivity() {
     private lateinit var triggerService: TriggerService
     private var status by mutableStateOf("Ready")
     private var isPaired by mutableStateOf(false)
+    private var hasBluetoothPermissions by mutableStateOf(false)
 
     // Result launcher for QR Code Scanning
     private val barcodeLauncher = registerForActivityResult(ScanContract()) { result ->
@@ -44,10 +48,29 @@ class MainActivity : ComponentActivity() {
         ActivityResultContracts.RequestMultiplePermissions()
     ) { perms ->
         val cameraGranted = perms[Manifest.permission.CAMERA] ?: false
-        val bleGranted = perms[Manifest.permission.BLUETOOTH_ADVERTISE] ?: false
+        val bleAdvertiseGranted = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            perms[Manifest.permission.BLUETOOTH_ADVERTISE] ?: false
+        } else {
+            true // Not required for older Android versions
+        }
+        val bleConnectGranted = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            perms[Manifest.permission.BLUETOOTH_CONNECT] ?: false
+        } else {
+            true
+        }
         
-        if (!cameraGranted) status = "Camera Permission Required for QR"
-        if (!bleGranted) status = "BLE Permissions Required"
+        hasBluetoothPermissions = bleAdvertiseGranted && bleConnectGranted
+        
+        if (!cameraGranted) {
+            status = "Camera Permission Required for QR"
+            Toast.makeText(this, "Camera permission is required to scan QR codes", Toast.LENGTH_LONG).show()
+        }
+        if (!hasBluetoothPermissions) {
+            status = "BLE Permissions Required"
+            Toast.makeText(this, "Bluetooth permissions are required to send triggers", Toast.LENGTH_LONG).show()
+        } else {
+            status = "Permissions Granted - Ready"
+        }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -62,17 +85,33 @@ class MainActivity : ComponentActivity() {
         }
         
         isPaired = securityManager.getPsk() != null
+        
+        // Check if permissions are already granted
+        checkPermissionsStatus()
+        
+        // Request permissions on startup
+        if (!hasBluetoothPermissions) {
+            requestPermissions()
+        }
 
         setContent {
             MainScreen(
                 status = status,
                 isPaired = isPaired,
+                hasBluetoothPermissions = hasBluetoothPermissions,
                 onScanQR = { 
-                    checkAndRequestPermissions()
-                    startQRScanner()
+                    if (!hasBluetoothPermissions) {
+                        requestPermissions()
+                    } else {
+                        startQRScanner()
+                    }
                 },
                 onTrigger = {
-                    if (::triggerService.isInitialized) {
+                    if (!hasBluetoothPermissions) {
+                        status = "Bluetooth permissions required"
+                        Toast.makeText(this, "Please grant Bluetooth permissions", Toast.LENGTH_LONG).show()
+                        requestPermissions()
+                    } else if (::triggerService.isInitialized) {
                         triggerService.sendTrigger()
                         status = "Trigger Beacon Sent"
                     }
@@ -87,14 +126,27 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private fun checkAndRequestPermissions() {
-        permissionLauncher.launch(
-            arrayOf(
-                Manifest.permission.CAMERA,
-                Manifest.permission.BLUETOOTH_ADVERTISE,
-                Manifest.permission.BLUETOOTH_CONNECT
-            )
+    private fun checkPermissionsStatus() {
+        hasBluetoothPermissions = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            ContextCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH_ADVERTISE) == PackageManager.PERMISSION_GRANTED &&
+            ContextCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH_CONNECT) == PackageManager.PERMISSION_GRANTED
+        } else {
+            true
+        }
+    }
+
+    private fun requestPermissions() {
+        val permissions = mutableListOf(
+            Manifest.permission.CAMERA
         )
+        
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            permissions.add(Manifest.permission.BLUETOOTH_ADVERTISE)
+            permissions.add(Manifest.permission.BLUETOOTH_CONNECT)
+            permissions.add(Manifest.permission.BLUETOOTH_SCAN)
+        }
+        
+        permissionLauncher.launch(permissions.toTypedArray())
     }
 
     private fun startQRScanner() {
@@ -110,7 +162,8 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun MainScreen(
     status: String, 
-    isPaired: Boolean, 
+    isPaired: Boolean,
+    hasBluetoothPermissions: Boolean,
     onScanQR: () -> Unit, 
     onTrigger: () -> Unit,
     onReset: () -> Unit
@@ -139,9 +192,24 @@ fun MainScreen(
                     onClick = onTrigger,
                     modifier = Modifier.size(220.dp),
                     shape = MaterialTheme.shapes.extraLarge,
-                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = if (hasBluetoothPermissions) 
+                            MaterialTheme.colorScheme.primary 
+                        else 
+                            MaterialTheme.colorScheme.secondary
+                    ),
+                    enabled = hasBluetoothPermissions
                 ) {
                     Text("SEND TRIGGER", style = MaterialTheme.typography.titleMedium)
+                }
+                
+                if (!hasBluetoothPermissions) {
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text(
+                        "Grant Bluetooth permissions to enable trigger",
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodySmall
+                    )
                 }
                 
                 Spacer(modifier = Modifier.height(32.dp))
