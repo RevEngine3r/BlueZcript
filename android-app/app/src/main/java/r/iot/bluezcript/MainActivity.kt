@@ -33,9 +33,16 @@ class MainActivity : ComponentActivity() {
         
         securityManager = SecurityManager(this)
         val bluetoothManager = getSystemService(BLUETOOTH_SERVICE) as BluetoothManager
-        val advertiser = bluetoothManager.adapter.bluetoothLeScanner?.let { it.bluetoothLeScanner } // Simplified for brevity
-        // Note: Real implementation should handle null advertiser/adapter
-        triggerService = TriggerService(bluetoothManager.adapter.bluetoothLeScanner, securityManager)
+        val adapter = bluetoothManager.adapter
+        
+        // Fix: Retrieve the Advertiser instead of the Scanner
+        val advertiser = adapter?.bluetoothLeAdvertiser
+        
+        if (advertiser != null) {
+            triggerService = TriggerService(advertiser, securityManager)
+        } else {
+            status = "BLE Advertising not supported"
+        }
         
         isPaired = securityManager.getPsk() != null
 
@@ -49,8 +56,12 @@ class MainActivity : ComponentActivity() {
                     status = "Device Paired"
                 },
                 onTrigger = {
-                    triggerService.sendTrigger()
-                    status = "Beacon Sent"
+                    if (::triggerService.isInitialized) {
+                        triggerService.sendTrigger()
+                        status = "Beacon Sent"
+                    } else {
+                        status = "Error: Service Not Ready"
+                    }
                 },
                 onRequestPermissions = { checkPermissions() }
             )
