@@ -11,7 +11,7 @@
     </style>
 </head>
 <body class="bg-slate-50 text-slate-900">
-    <div class="max-w-5xl mx-auto px-4 py-12">
+    <div class="max-w-4xl mx-auto px-4 py-12">
         <header class="mb-12">
             <h1 class="text-3xl font-bold tracking-tight text-slate-900">BlueZcript</h1>
             <p class="text-slate-500">Secure BLE Trigger Management</p>
@@ -20,35 +20,33 @@
         {% if new_psk %}
         <div class="mb-8 p-6 bg-green-50 rounded-2xl border border-green-100 shadow-sm">
             <h3 class="font-bold text-green-800 text-lg">Device Ready to Pair!</h3>
-            <p class="text-green-700 mt-2 text-sm">Scan the QR code with your Android app to complete pairing:</p>
+            <p class="text-green-700 mt-2 text-sm">Scan the QR code with your Android app:</p>
             
             <div class="mt-4 flex flex-col md:flex-row gap-6 items-center justify-center">
                 {% if qr_code %}
                 <div class="bg-white p-4 rounded-xl border border-green-200 shadow-md">
                     <img src="data:image/png;base64,{{ qr_code }}" class="w-48 h-48" alt="Pairing QR Code">
-                    <p class="text-xs text-center text-slate-400 mt-2 uppercase font-bold">Scan with App</p>
+                    <p class="text-xs text-center text-slate-400 mt-2 uppercase font-bold">Scan to Pair</p>
                 </div>
                 {% endif %}
             </div>
-            <div class="mt-4 p-3 bg-white rounded-xl border border-green-200">
-                <p class="text-xs text-green-600 font-bold uppercase mb-1">Device Name</p>
-                <p class="font-medium">{{ new_psk.name }}</p>
+            <div class="mt-4 grid grid-cols-2 gap-3">
+                <div class="p-3 bg-white rounded-xl border border-green-200">
+                    <p class="text-xs text-green-600 font-bold uppercase mb-1">Device Name</p>
+                    <p class="font-medium">{{ new_psk.name }}</p>
+                </div>
+                <div class="p-3 bg-white rounded-xl border border-green-200">
+                    <p class="text-xs text-green-600 font-bold uppercase mb-1">Device ID</p>
+                    <p class="font-mono text-sm">{{ new_psk.id }}</p>
+                </div>
             </div>
-            <div class="mt-3 p-3 bg-amber-50 rounded-xl border border-amber-200">
-                <p class="text-xs font-bold text-amber-700 mb-1">⚠ If automatic pairing fails:</p>
-                <ol class="text-xs text-amber-700 space-y-1 ml-4 list-decimal">
-                    <li>Check listener output for: <code class="bg-amber-100 px-1 rounded">Received beacon from [MAC]</code></li>
-                    <li>Copy the actual BLE MAC address</li>
-                    <li>Use "Manual MAC Registration" below to re-register</li>
-                </ol>
-            </div>
-            <p class="text-xs text-green-600 mt-4 italic">* The device will be registered automatically when you scan the QR code.</p>
+            <p class="text-xs text-green-600 mt-4 italic">* For security, the PSK will not be shown again.</p>
         </div>
         {% endif %}
 
-        <div class="grid grid-cols-1 lg:grid-cols-5 gap-8">
-            <div class="lg:col-span-3">
-                <section class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden mb-8">
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            <div class="lg:col-span-2">
+                <section class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
                     <div class="px-6 py-4 border-b border-slate-100 bg-slate-50/50">
                         <h2 class="font-semibold text-slate-700">Paired Devices</h2>
                     </div>
@@ -58,7 +56,7 @@
                             <div class="px-6 py-4 flex items-center justify-between hover:bg-slate-50 transition-colors">
                                 <div>
                                     <p class="font-medium text-slate-900">{{ dev.name }}</p>
-                                    <code class="text-xs text-slate-400 uppercase tracking-wider">BLE MAC: {{ id }}</code>
+                                    <code class="text-xs text-slate-400 uppercase tracking-wider">ID: {{ id }}</code>
                                 </div>
                                 <form action="/delete-device/{{ id }}" method="post">
                                     <button type="submit" class="text-red-500 hover:text-red-700 text-sm font-medium">Remove</button>
@@ -72,32 +70,9 @@
                         {% endif %}
                     </div>
                 </section>
-
-                <section class="bg-amber-50 p-6 rounded-2xl border border-amber-200">
-                    <h3 class="font-semibold text-amber-900 mb-3">Manual MAC Registration</h3>
-                    <p class="text-xs text-amber-700 mb-4">Use this if the automatic MAC doesn't match the actual BLE advertising MAC.</p>
-                    <form action="/manual-register" method="post" class="space-y-3">
-                        <div class="grid grid-cols-2 gap-3">
-                            <div>
-                                <label class="block text-xs font-bold text-amber-700 uppercase mb-1">Device Name</label>
-                                <input type="text" name="name" placeholder="My Phone" required
-                                    class="w-full px-3 py-2 bg-white border border-amber-200 rounded-lg text-sm focus:ring-2 focus:ring-amber-500 outline-none">
-                            </div>
-                            <div>
-                                <label class="block text-xs font-bold text-amber-700 uppercase mb-1">Actual BLE MAC</label>
-                                <input type="text" name="mac_address" placeholder="7b0d1231fed3" required
-                                    pattern="[0-9A-Fa-f:]{17}|[0-9A-Fa-f]{12}"
-                                    class="w-full px-3 py-2 bg-white border border-amber-200 rounded-lg text-sm font-mono focus:ring-2 focus:ring-amber-500 outline-none">
-                            </div>
-                        </div>
-                        <button type="submit" class="w-full bg-amber-600 text-white py-2 rounded-lg text-sm font-semibold hover:bg-amber-700 transition-all">
-                            Register Manually
-                        </button>
-                    </form>
-                </section>
             </div>
 
-            <div class="lg:col-span-2">
+            <div class="lg:col-span-1">
                 <section class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
                     <h2 class="font-semibold text-slate-700 mb-4">Add New Device</h2>
                     <form action="/add-device" method="post" class="space-y-4">
@@ -105,13 +80,23 @@
                             <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Device Name</label>
                             <input type="text" name="name" placeholder="e.g. My Phone" required
                                 class="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all">
-                            <p class="text-xs text-slate-400 mt-2">Generate a QR code for automatic pairing</p>
+                            <p class="text-xs text-slate-400 mt-2">A QR code will be generated for pairing</p>
                         </div>
                         <button type="submit" class="w-full bg-indigo-600 text-white py-2 rounded-xl font-semibold hover:bg-indigo-700 transition-all shadow-md">
                             Generate QR Code
                         </button>
                     </form>
                 </section>
+
+                <div class="mt-6 p-4 bg-blue-50 rounded-xl border border-blue-200">
+                    <p class="text-xs font-bold text-blue-800 mb-2">ℹ How it works</p>
+                    <ul class="text-xs text-blue-700 space-y-1">
+                        <li>• PSK-based authentication</li>
+                        <li>• Works with MAC randomization</li>
+                        <li>• Replay attack protection</li>
+                        <li>• No manual MAC entry needed</li>
+                    </ul>
+                </div>
             </div>
         </div>
     </div>
