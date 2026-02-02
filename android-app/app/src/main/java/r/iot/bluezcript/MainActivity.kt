@@ -25,21 +25,34 @@ class MainActivity : ComponentActivity() {
     private var status by mutableStateOf("Ready")
     private var isPaired by mutableStateOf(false)
 
+    // Result launcher for QR Code Scanning
     private val barcodeLauncher = registerForActivityResult(ScanContract()) { result ->
         if (result.contents != null) {
             val parts = result.contents.split("|")
             if (parts.size == 2) {
                 securityManager.savePairing(parts[0], parts[1])
                 isPaired = true
-                status = "Paired via QR"
+                status = "Successfully Paired"
             } else {
-                Toast.makeText(this, "Invalid QR Format", Toast.LENGTH_SHORT).show()
+                status = "Invalid QR Code Format"
+                Toast.makeText(this, "QR Format Error", Toast.LENGTH_SHORT).show()
             }
         }
     }
 
+    private val permissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { perms ->
+        val cameraGranted = perms[Manifest.permission.CAMERA] ?: false
+        val bleGranted = perms[Manifest.permission.BLUETOOTH_ADVERTISE] ?: false
+        
+        if (!cameraGranted) status = "Camera Permission Required for QR"
+        if (!bleGranted) status = "BLE Permissions Required"
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        
         securityManager = SecurityManager(this)
         val bluetoothManager = getSystemService(BLUETOOTH_SERVICE) as BluetoothManager
         val advertiser = bluetoothManager.adapter?.bluetoothLeAdvertiser
@@ -55,47 +68,86 @@ class MainActivity : ComponentActivity() {
                 status = status,
                 isPaired = isPaired,
                 onScanQR = { 
-                    val options = ScanOptions()
-                    options.setDesiredBarcodeFormats(ScanOptions.QR_CODE)
-                    options.setPrompt("Scan BlueZcript Pairing QR")
-                    options.setBeepEnabled(false)
-                    barcodeLauncher.launch(options)
+                    checkAndRequestPermissions()
+                    startQRScanner()
                 },
                 onTrigger = {
                     if (::triggerService.isInitialized) {
                         triggerService.sendTrigger()
-                        status = "Beacon Sent"
+                        status = "Trigger Beacon Sent"
                     }
+                },
+                onReset = {
+                    // Hidden feature to reset pairing for testing
+                    getSharedPreferences("bluezcript_security", MODE_PRIVATE).edit().clear().apply()
+                    isPaired = false
+                    status = "Pairing Reset"
                 }
             )
         }
     }
+
+    private fun checkAndRequestPermissions() {
+        permissionLauncher.launch(
+            arrayOf(
+                Manifest.permission.CAMERA,
+                Manifest.permission.BLUETOOTH_ADVERTISE,
+                Manifest.permission.BLUETOOTH_CONNECT
+            )
+        )
+    }
+
+    private fun startQRScanner() {
+        val options = ScanOptions()
+        options.setDesiredBarcodeFormats(ScanOptions.QR_CODE)
+        options.setPrompt("Align QR code from Web UI within the frame")
+        options.setBeepEnabled(true)
+        options.setOrientationLocked(false)
+        barcodeLauncher.launch(options)
+    }
 }
 
 @Composable
-fun MainScreen(status: String, isPaired: Boolean, onScanQR: () -> Unit, onTrigger: () -> Unit) {
+fun MainScreen(
+    status: String, 
+    isPaired: Boolean, 
+    onScanQR: () -> Unit, 
+    onTrigger: () -> Unit,
+    onReset: () -> Unit
+) {
     Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
         Column(
-            modifier = Modifier.fillMaxSize().padding(24.dp),
+            modifier = Modifier.fillMaxSize().padding(32.dp),
             verticalArrangement = Arrangement.Center,
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Text(text = "BlueZcript Secure", style = MaterialTheme.typography.headlineMedium)
-            Text(text = "Status: $status", color = MaterialTheme.colorScheme.primary)
+            Text(text = "BlueZcript Secure", style = MaterialTheme.typography.headlineLarge)
+            Text(text = status, color = MaterialTheme.colorScheme.secondary, style = MaterialTheme.typography.bodyMedium)
             
-            Spacer(modifier = Modifier.height(48.dp))
+            Spacer(modifier = Modifier.height(64.dp))
 
             if (!isPaired) {
-                Button(onClick = onScanQR, modifier = Modifier.fillMaxWidth().height(56.dp)) {
+                Button(
+                    onClick = onScanQR, 
+                    modifier = Modifier.fillMaxWidth().height(64.dp),
+                    shape = MaterialTheme.shapes.medium
+                ) {
                     Text("SCAN QR CODE TO PAIR")
                 }
             } else {
                 Button(
                     onClick = onTrigger,
-                    modifier = Modifier.size(200.dp),
-                    shape = MaterialTheme.shapes.extraLarge
+                    modifier = Modifier.size(220.dp),
+                    shape = MaterialTheme.shapes.extraLarge,
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
                 ) {
-                    Text("TRIGGER")
+                    Text("SEND TRIGGER", style = MaterialTheme.typography.titleMedium)
+                }
+                
+                Spacer(modifier = Modifier.height(32.dp))
+                
+                TextButton(onClick = onReset) {
+                    Text("Reset Pairing Credentials", color = MaterialTheme.colorScheme.error)
                 }
             }
         }

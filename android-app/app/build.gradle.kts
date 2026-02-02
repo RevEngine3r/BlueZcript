@@ -8,9 +8,7 @@ plugins {
 
 android {
     namespace = "r.iot.bluezcript"
-    compileSdk {
-        version = release(36)
-    }
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "r.iot.bluezcript"
@@ -56,10 +54,10 @@ dependencies {
     implementation(libs.androidx.compose.ui.tooling.preview)
     implementation(libs.androidx.compose.material3)
     implementation(libs.androidx.activity.ktx)
-    implementation(libs.androidx.compose.runtime)
-    implementation(libs.androidx.activity.ktx)
-    implementation(libs.androidx.fragment.ktx)
-    implementation(libs.androidx.material3)
+    
+    // QR Code Scanning Library
+    implementation("com.journeyapps:zxing-android-embedded:4.3.0")
+    
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
