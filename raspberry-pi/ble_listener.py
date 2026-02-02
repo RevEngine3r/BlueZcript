@@ -10,64 +10,86 @@ class ScanDelegate(DefaultDelegate):
         self.sm = security_manager
 
     def handleDiscovery(self, dev, isNewDev, isNewData):
-        # Filter for manufacturer data (Type 0xFF)
-        mfg_data = dev.getValueText(255)
-        if not mfg_data:
-            return
+        # Check for manufacturer data with Company ID 0xFFFF
+        # Note: bluepy returns manufacturer data indexed by company ID
+        for (adtype, desc, value) in dev.getScanData():
+            if adtype == 255:  # Manufacturer Specific Data
+                try:
+                    # Parse the manufacturer data
+                    # Format: Company ID (2 bytes little-endian) + payload
+                    data_bytes = bytes.fromhex(value)
+                    
+                    if len(data_bytes) < 2:
+                        continue
+                    
+                    # Extract company ID (little-endian in BLE advertisement)
+                    company_id = int.from_bytes(data_bytes[0:2], 'little')
+                    
+                    if company_id != 0xFFFF:
+                        continue
+                    
+                    # Extract payload (everything after company ID)
+                    payload = data_bytes[2:]
+                    
+                    # Protocol for payload:
+                    # [0] Type (0x01)
+                    # [1:5] Nonce (4 bytes, big-endian)
+                    # [5:13] Signature (8 bytes)
+                    
+                    if len(payload) < 13:
+                        print(f"[!] Invalid payload length: {len(payload)} (expected 13)")
+                        continue
 
-        try:
-            # Convert hex string to bytes
-            data_bytes = bytes.fromhex(mfg_data)
-            
-            # Protocol check:
-            # [0:2] Company ID (0xFFFF)
-            # [2] Type (0x01)
-            # [3:7] Nonce (4 bytes)
-            # [7:15] Signature (8 bytes)
-            
-            if len(data_bytes) < 15:
-                return
+                    cmd_type = payload[0]
+                    if cmd_type != 0x01:
+                        print(f"[!] Unknown command type: 0x{cmd_type:02x}")
+                        continue
+                    
+                    nonce = int.from_bytes(payload[1:5], 'big')
+                    signature = payload[5:13]
+                    
+                    # Identify device by address
+                    device_id = dev.addr.replace(":", "").lower()
+                    
+                    print(f"[*] Received beacon from {device_id} (Nonce: {nonce})")
+                    
+                    is_valid, reason = self.sm.verify_beacon(device_id, nonce, signature)
+                    
+                    if is_valid:
+                        print(f"[✓] Valid trigger from {device_id}")
+                        self.execute_trigger()
+                    else:
+                        print(f"[✗] Blocked beacon from {device_id}: {reason}")
 
-            company_id = int.from_bytes(data_bytes[0:2], 'big')
-            if company_id != 0xFFFF:
-                return
-
-            cmd_type = data_bytes[2]
-            nonce = int.from_bytes(data_bytes[3:7], 'big')
-            signature = data_bytes[7:15]
-            
-            # Identify device by address (simplified for this implementation)
-            device_id = dev.addr.replace(":", "").lower()
-            
-            is_valid, reason = self.sm.verify_beacon(device_id, nonce, signature)
-            
-            if is_valid:
-                print(f"[*] Valid trigger from {device_id} (Nonce: {nonce})")
-                self.execute_trigger()
-            else:
-                if reason != "Unknown device": # Don't log every random BLE device
-                    print(f"[!] Blocked beacon from {device_id}: {reason}")
-
-        except Exception as e:
-            # Quietly ignore malformed packets
-            pass
+                except Exception as e:
+                    print(f"[!] Error parsing advertisement: {e}")
+                    pass
 
     def execute_trigger(self):
-        script_path = "./trigger_script.sh"
+        script_path = "./trigger_action.sh"
         if os.path.exists(script_path):
+            print("[→] Executing trigger action...")
             subprocess.Popen(["bash", script_path])
         else:
-            print("[!] Trigger received but trigger_script.sh not found")
+            print("[!] Trigger received but trigger_action.sh not found")
 
 async def main():
     sm = SecurityManager()
     scanner = Scanner().withDelegate(ScanDelegate(sm))
     
-    print("--- BlueZcript Authenticated Listener Active ---")
+    print("╔═══════════════════════════════════════════════════╗")
+    print("║  BlueZcript Authenticated Listener Active        ║")
+    print("╚═══════════════════════════════════════════════════╝")
+    print(f"Trusted devices: {len(sm.devices)}")
+    print("Scanning for BLE advertisements...\n")
+    
     while True:
         # Scan for 2 seconds, then repeat
-        scanner.scan(2.0, passive=True)
+        scanner.scan(2.0, passive=False)
         await asyncio.sleep(0.1)
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        print("\n[!] Listener stopped by user")
