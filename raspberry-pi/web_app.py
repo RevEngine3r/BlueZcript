@@ -5,6 +5,7 @@ from security_manager import SecurityManager
 import qrcode
 import io
 import base64
+import re
 
 app = FastAPI(title="BlueZcript Management")
 templates = Jinja2Templates(directory="templates")
@@ -36,11 +37,19 @@ async def index(request: Request):
     })
 
 @app.post("/add-device")
-async def add_device(name: str = Form(...)):
+async def add_device(name: str = Form(...), mac_address: str = Form(...)):
     global last_generated_psk
-    import hashlib
-    import time
-    device_id = hashlib.md5(f"{name}{time.time()}".encode()).hexdigest()[:12]
+    
+    # Normalize MAC address: remove colons and convert to lowercase
+    # Accept formats: AA:BB:CC:DD:EE:FF or AABBCCDDEEFF
+    mac_clean = re.sub(r'[^0-9a-fA-F]', '', mac_address).lower()
+    
+    if len(mac_clean) != 12:
+        # Invalid MAC address length
+        return RedirectResponse(url="/?error=invalid_mac", status_code=303)
+    
+    # Use cleaned MAC as device_id
+    device_id = mac_clean
     psk = sm.register_device(device_id, name)
     last_generated_psk = {"id": device_id, "psk": psk, "name": name}
     return RedirectResponse(url="/", status_code=303)
