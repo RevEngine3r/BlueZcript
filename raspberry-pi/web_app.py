@@ -51,3 +51,7 @@ async def delete_device(device_id: str):
         del sm.devices[device_id]
         sm._save_db()
     return RedirectResponse(url="/", status_code=303)
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)
