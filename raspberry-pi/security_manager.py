@@ -22,9 +22,10 @@ class SecurityManager:
         with open(self.db_path, 'w') as f:
             json.dump(self.devices, f, indent=4)
 
-    def register_device(self, device_id, name):
+    def register_device(self, device_id, name, psk=None):
         """Generates a new PSK for a device."""
-        psk = secrets.token_hex(16)
+        if psk is None:
+            psk = secrets.token_hex(16)
         self.devices[device_id] = {
             "name": name,
             "psk": psk,
@@ -34,14 +35,40 @@ class SecurityManager:
         self._save_db()
         return psk
 
+    def verify_any_device(self, nonce, received_sig):
+        """
+        Try to verify the signature with any registered device's PSK.
+        Returns (is_valid, device_name) tuple.
+        This allows MAC-independent authentication.
+        """
+        # Construct the message that was signed
+        message = b"\x01" + nonce.to_bytes(4, 'big')
+        
+        for device_id, device in self.devices.items():
+            # Check replay attack
+            if nonce <= device["last_nonce"]:
+                continue
+            
+            # Compute expected signature
+            expected_sig = hmac.new(
+                bytes.fromhex(device["psk"]),
+                message,
+                hashlib.sha256
+            ).digest()[:8]
+            
+            # Check if signature matches
+            if hmac.compare_digest(expected_sig, received_sig):
+                # Valid! Update nonce and save
+                device["last_nonce"] = nonce
+                self._save_db()
+                return True, device["name"]
+        
+        return False, None
+
     def verify_beacon(self, device_id, nonce, received_sig):
         """
-        Verifies the HMAC signature and checks for replay attacks.
-        
-        Args:
-            device_id: Unique ID of the sender.
-            nonce: 4-byte integer nonce.
-            received_sig: 8-byte signature bytes.
+        Legacy method: Verifies the HMAC signature for a specific device.
+        Kept for backwards compatibility.
         """
         device = self.devices.get(device_id)
         if not device:
@@ -51,7 +78,6 @@ class SecurityManager:
             return False, "Replay detected"
 
         # Construct data for HMAC: [Command(1 byte) + Nonce(4 bytes)]
-        # For simplicity, we assume command is 0x01 (Trigger)
         message = b"\x01" + nonce.to_bytes(4, 'big')
         
         expected_sig = hmac.new(
