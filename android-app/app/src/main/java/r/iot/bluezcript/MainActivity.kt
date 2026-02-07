@@ -28,6 +28,7 @@ import kotlinx.coroutines.launch
 import java.net.HttpURLConnection
 import java.net.URL
 import java.net.URLEncoder
+import androidx.core.content.edit
 
 class MainActivity : ComponentActivity() {
 
@@ -76,17 +77,11 @@ class MainActivity : ComponentActivity() {
         ActivityResultContracts.RequestMultiplePermissions()
     ) { perms ->
         val cameraGranted = perms[Manifest.permission.CAMERA] ?: false
-        val bleAdvertiseGranted = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+        val bleAdvertiseGranted =
             perms[Manifest.permission.BLUETOOTH_ADVERTISE] ?: false
-        } else {
-            true
-        }
-        val bleConnectGranted = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+        val bleConnectGranted =
             perms[Manifest.permission.BLUETOOTH_CONNECT] ?: false
-        } else {
-            true
-        }
-        
+
         hasBluetoothPermissions = bleAdvertiseGranted && bleConnectGranted
         
         if (!cameraGranted) {
@@ -152,7 +147,7 @@ class MainActivity : ComponentActivity() {
                     }
                 },
                 onReset = {
-                    getSharedPreferences("bluezcript_security", MODE_PRIVATE).edit().clear().apply()
+                    getSharedPreferences("bluezcript_security", MODE_PRIVATE).edit { clear() }
                     isPaired = false
                     status = "Pairing Reset"
                 }
@@ -163,10 +158,8 @@ class MainActivity : ComponentActivity() {
     @SuppressLint("HardwareIds", "MissingPermission")
     private fun getBluetoothMacAddress(): String? {
         return try {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                if (ContextCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH_CONNECT) != PackageManager.PERMISSION_GRANTED) {
-                    return null
-                }
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH_CONNECT) != PackageManager.PERMISSION_GRANTED) {
+                return null
             }
             val address = bluetoothManager.adapter?.address
             // Note: On Android 6+ this may return 02:00:00:00:00:00 for privacy
@@ -223,25 +216,20 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun checkPermissionsStatus() {
-        hasBluetoothPermissions = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+        hasBluetoothPermissions =
             ContextCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH_ADVERTISE) == PackageManager.PERMISSION_GRANTED &&
             ContextCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH_CONNECT) == PackageManager.PERMISSION_GRANTED
-        } else {
-            true
-        }
     }
 
     private fun requestPermissions() {
         val permissions = mutableListOf(
             Manifest.permission.CAMERA
         )
-        
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            permissions.add(Manifest.permission.BLUETOOTH_ADVERTISE)
-            permissions.add(Manifest.permission.BLUETOOTH_CONNECT)
-            permissions.add(Manifest.permission.BLUETOOTH_SCAN)
-        }
-        
+
+        permissions.add(Manifest.permission.BLUETOOTH_ADVERTISE)
+        permissions.add(Manifest.permission.BLUETOOTH_CONNECT)
+        permissions.add(Manifest.permission.BLUETOOTH_SCAN)
+
         permissionLauncher.launch(permissions.toTypedArray())
     }
 
