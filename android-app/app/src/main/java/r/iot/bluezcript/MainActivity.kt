@@ -22,6 +22,7 @@ import com.journeyapps.barcodescanner.ScanContract
 import com.journeyapps.barcodescanner.ScanOptions
 import r.iot.bluezcript.ble.TriggerService
 import r.iot.bluezcript.security.SecurityManager
+import r.iot.bluezcript.ui.theme.MyApplicationTheme
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -124,34 +125,36 @@ class MainActivity : ComponentActivity() {
         }
 
         setContent {
-            MainScreen(
-                status = status,
-                isPaired = isPaired,
-                hasBluetoothPermissions = hasBluetoothPermissions,
-                detectedMac = detectedMacAddress,
-                onScanQR = { 
-                    if (!hasBluetoothPermissions) {
-                        requestPermissions()
-                    } else {
-                        startQRScanner()
+            MyApplicationTheme {
+                MainScreen(
+                    status = status,
+                    isPaired = isPaired,
+                    hasBluetoothPermissions = hasBluetoothPermissions,
+                    detectedMac = detectedMacAddress,
+                    onScanQR = { 
+                        if (!hasBluetoothPermissions) {
+                            requestPermissions()
+                        } else {
+                            startQRScanner()
+                        }
+                    },
+                    onTrigger = {
+                        if (!hasBluetoothPermissions) {
+                            status = "Bluetooth permissions required"
+                            Toast.makeText(this, "Please grant Bluetooth permissions", Toast.LENGTH_LONG).show()
+                            requestPermissions()
+                        } else if (::triggerService.isInitialized) {
+                            triggerService.sendTrigger()
+                            status = "Trigger Beacon Sent"
+                        }
+                    },
+                    onReset = {
+                        getSharedPreferences("bluezcript_security", MODE_PRIVATE).edit { clear() }
+                        isPaired = false
+                        status = "Pairing Reset"
                     }
-                },
-                onTrigger = {
-                    if (!hasBluetoothPermissions) {
-                        status = "Bluetooth permissions required"
-                        Toast.makeText(this, "Please grant Bluetooth permissions", Toast.LENGTH_LONG).show()
-                        requestPermissions()
-                    } else if (::triggerService.isInitialized) {
-                        triggerService.sendTrigger()
-                        status = "Trigger Beacon Sent"
-                    }
-                },
-                onReset = {
-                    getSharedPreferences("bluezcript_security", MODE_PRIVATE).edit { clear() }
-                    isPaired = false
-                    status = "Pairing Reset"
-                }
-            )
+                )
+            }
         }
     }
 
