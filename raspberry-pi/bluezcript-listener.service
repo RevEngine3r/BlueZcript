@@ -1,0 +1,23 @@
+[Unit]
+Description=BlueZcript BLE Listener
+After=network.target bluetooth.target
+Wants=bluetooth.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/home/pi/Bluezcript/raspberry-pi
+ExecStart=/usr/bin/python3 /home/pi/Bluezcript/raspberry-pi/ble_listener.py
+Restart=always
+RestartSec=10
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=bluezcript-listener
+
+# Security
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target
